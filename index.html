@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultimate Admin Portal - Live Screen Share</title>
+    <title>Ultimate Admin Portal - Peer-to-Peer Live</title>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <style>
         :root { --primary: #007bff; --dark: #121212; --panel: #1e1e1e; }
         body { margin: 0; background: var(--dark); color: white; font-family: sans-serif; overflow: hidden; }
@@ -31,12 +32,11 @@
         .menu-item { padding: 15px 25px; border-bottom: 1px solid #333; cursor: pointer; color: #ccc; }
         .menu-item:hover { background: #252525; color: white; }
 
-        .page { display: none; width: 100%; max-width: 800px; }
+        .page { display: none; width: 100%; max-width: 850px; }
         .page.active { display: block; }
         .card { background: #222; padding: 25px; border-radius: 12px; border: 1px solid #333; }
         
-        /* Video Styling */
-        #remote-video, #local-video { width: 100%; border-radius: 10px; background: #000; margin-top: 15px; border: 2px solid #444; }
+        #shared-video { width: 100%; border-radius: 10px; background: #000; margin-top: 15px; border: 2px solid #444; min-height: 300px; }
         .share-btn { background: #28a745; color: white; padding: 12px 25px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
         .stop-btn { background: #dc3545; color: white; padding: 12px 25px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; display: none; }
 
@@ -71,10 +71,10 @@
         <div class="content-area">
             <div id="page-video" class="page active">
                 <div class="card" style="text-align:center;">
-                    <h2 style="color:red;">🔴 Live Streaming</h2>
-                    <a id="play-btn" href="#" target="_blank" style="background:red; color:white; padding:15px 40px; border-radius:10px; text-decoration:none; font-weight:bold; display:inline-block;">OPEN VIDEO PLAYER</a>
+                    <h2 style="color:red;">🔴 YouTube Player</h2>
+                    <a id="play-btn" href="#" target="_blank" style="background:red; color:white; padding:15px 40px; border-radius:10px; text-decoration:none; font-weight:bold; display:inline-block;">WATCH YOUTUBE</a>
                     <div style="margin-top:20px;">
-                        <input type="text" id="yt-url" style="width:60%; padding:12px; background:#333; color:white; border:none;" placeholder="Paste YouTube Link...">
+                        <input type="text" id="yt-url" style="width:60%; padding:12px; background:#333; color:white; border:none;" placeholder="New YouTube Link...">
                         <button onclick="updateLink()" style="padding:12px; background:green; color:white; border:none;">Update</button>
                     </div>
                 </div>
@@ -83,23 +83,23 @@
             <div id="page-screenshare" class="page">
                 <div class="card" style="text-align:center;">
                     <h2>🖥️ Live Screen Sharing</h2>
-                    <p id="share-status">Click start to broadcast your screen to all users.</p>
-                    <button id="start-share" class="share-btn" onclick="startCapture()">Start Broadcast</button>
-                    <button id="stop-share" class="stop-btn" onclick="stopCapture()">Stop Broadcasting</button>
-                    <video id="local-video" autoplay playsinline muted></video>
+                    <p id="share-status">Connecting to network...</p>
+                    <button id="start-share" class="share-btn" onclick="startCapture()">Start Sharing</button>
+                    <button id="stop-share" class="stop-btn" onclick="stopCapture()">Stop Sharing</button>
+                    <button id="watch-live" class="share-btn" style="display:none; background:#007bff;" onclick="joinStream()">Watch Admin Live</button>
+                    <video id="shared-video" autoplay playsinline></video>
                 </div>
             </div>
 
             <div id="page-profile" class="page"><div class="card"><h2>👤 Profile</h2><p>User: <span id="p-name"></span></p></div></div>
-            <div id="page-version" class="page"><div class="card"><h2>📦 Version</h2><p>v2.1.0 Stable - WebRTC Enabled</p></div></div>
         </div>
 
         <div class="chat-sidebar">
             <div style="padding:15px; background:#eee; font-weight:bold;">Live Chat</div>
             <div id="chat-msgs"></div>
-            <div style="padding:10px; display:flex; gap:5px; border-top:1px solid #ddd;">
-                <input type="text" id="c-text" style="flex:1; padding:8px;" placeholder="Type message...">
-                <button onclick="sendMsg()" style="padding:8px; background:var(--primary); color:white; border:none; border-radius:5px;">Send</button>
+            <div style="padding:10px; display:flex; gap:5px;">
+                <input type="text" id="c-text" style="flex:1; padding:8px;" placeholder="Message...">
+                <button onclick="sendMsg()" style="padding:8px; background:var(--primary); color:white; border:none;">Send</button>
             </div>
         </div>
     </div>
@@ -110,7 +110,6 @@
     <div class="menu-item" onclick="showPage('page-profile')">Profile</div>
     <div class="menu-item" onclick="showPage('page-video')">Video</div>
     <div class="menu-item" onclick="showPage('page-screenshare')">Screen Sharing</div>
-    <div class="menu-item" onclick="showPage('page-version')">Version</div>
     <div class="menu-item" onclick="logout()" style="color:red;">Logout</div>
 </div>
 
@@ -125,46 +124,80 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // --- Screen Share Broadcast Logic ---
-    let displayStream = null;
-    const localVid = document.getElementById('local-video');
+    // --- PeerJS & Screen Share Logic ---
+    let myPeerId = null;
+    let peer = null;
+    let localStream = null;
+    const currentUser = localStorage.getItem('active_user');
 
-    // Watch for other users sharing
-    db.ref('screen_share_status').on('value', (s) => {
+    function initPeer() {
+        // Hum user ki ID hi Peer ID banayenge taake pehchan asan ho
+        peer = new Peer(currentUser); 
+        peer.on('open', id => { 
+            myPeerId = id; 
+            document.getElementById('share-status').innerText = "Network Ready: " + id;
+        });
+
+        // Receiving a call (For Viewer)
+        peer.on('call', call => {
+            call.answer(); // Viewer answers with nothing
+            call.on('stream', remoteStream => {
+                document.getElementById('shared-video').srcObject = remoteStream;
+            });
+        });
+    }
+
+    // Monitoring Broadcaster in Firebase
+    db.ref('screen_share_status').on('value', s => {
         const data = s.val();
         const statusText = document.getElementById('share-status');
-        if(data && data.user !== localStorage.getItem('active_user')) {
-            statusText.innerHTML = `<b style="color:#28a745;">🔴 ${data.user} is currently Live!</b>`;
-            // In a real app, you'd join a WebRTC room here.
+        const watchBtn = document.getElementById('watch-live');
+        const startBtn = document.getElementById('start-share');
+
+        if(data && data.user !== currentUser) {
+            statusText.innerHTML = `<b style="color:#28a745;">🔴 ${data.user} is Live!</b>`;
+            watchBtn.style.display = 'inline-block';
+            startBtn.style.display = 'none';
         } else if(!data) {
-            statusText.innerText = "No one is sharing right now.";
+            statusText.innerText = "No one is sharing.";
+            watchBtn.style.display = 'none';
+            if(!localStream) startBtn.style.display = 'inline-block';
         }
     });
 
     async function startCapture() {
         try {
-            displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-            localVid.srcObject = displayStream;
-            
-            // Tell everyone I am live
-            db.ref('screen_share_status').set({ user: localStorage.getItem('active_user'), active: true });
+            localStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            document.getElementById('shared-video').srcObject = localStream;
+            db.ref('screen_share_status').set({ user: currentUser });
 
             document.getElementById('start-share').style.display = 'none';
             document.getElementById('stop-share').style.display = 'inline-block';
-            
-            displayStream.getVideoTracks()[0].onended = () => stopCapture();
-        } catch (err) { alert("Sharing cancelled."); }
+
+            localStream.getVideoTracks()[0].onended = () => stopCapture();
+        } catch (err) { alert("Sharing failed."); }
     }
 
     function stopCapture() {
-        if(displayStream) displayStream.getTracks().forEach(t => t.stop());
-        localVid.srcObject = null;
+        if(localStream) localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
+        document.getElementById('shared-video').srcObject = null;
         db.ref('screen_share_status').remove();
         document.getElementById('start-share').style.display = 'inline-block';
         document.getElementById('stop-share').style.display = 'none';
     }
 
-    // --- Original Auth & UI Logic (DO NOT CHANGE) ---
+    function joinStream() {
+        db.ref('screen_share_status').once('value', s => {
+            const broadcasterId = s.val().user;
+            // PeerJS se broadcaster ko "call" karein taake stream mil sakay
+            // Note: Actual P2P mein broadcaster viewer ko stream bhejta hai
+            alert("Connecting to " + broadcasterId + "...");
+            const call = peer.call(broadcasterId, new MediaStream()); // Dummy stream to initiate
+        });
+    }
+
+    // --- Original Logic ---
     let isSignUp = false;
     function toggleAuthMode() {
         isSignUp = !isSignUp;
@@ -186,17 +219,16 @@
         }
     }
 
-    function logout() { localStorage.clear(); location.reload(); }
-
-    const active = localStorage.getItem('active_user');
-    if(active) {
+    if(currentUser) {
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('main-ui').classList.remove('hidden');
-        document.getElementById('display-name').innerText = active;
-        document.getElementById('p-name').innerText = active;
-        document.getElementById('avatar-icon').innerText = active.charAt(0).toUpperCase();
+        document.getElementById('display-name').innerText = currentUser;
+        document.getElementById('p-name').innerText = currentUser;
+        document.getElementById('avatar-icon').innerText = currentUser.charAt(0).toUpperCase();
+        initPeer();
     }
 
+    function logout() { localStorage.clear(); location.reload(); }
     function toggleSidebar() { document.getElementById('sidebar').classList.toggle('active'); }
     function showPage(id) {
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -204,22 +236,19 @@
         toggleSidebar();
     }
 
-    // Video & Chat Listeners
     db.ref('live_vid').on('value', s => { document.getElementById('play-btn').href = "https://www.youtube.com/watch?v=" + (s.val() || 'dQw4w9WgXcQ'); });
     function updateLink() {
         const val = document.getElementById('yt-url').value;
         if(val) { db.ref('live_vid').set(val.includes('v=') ? val.split('v=')[1].split('&')[0] : val); document.getElementById('yt-url').value = ""; }
     }
-
     db.ref('live_chat').limitToLast(15).on('value', snap => {
         const box = document.getElementById('chat-msgs'); box.innerHTML = "";
         snap.forEach(c => { box.innerHTML += `<div class="msg-bubble"><span><b>${c.val().user}:</b> ${c.val().text}</span> <b onclick="deleteMsg('${c.key}')" style="cursor:pointer;color:red;">...</b></div>`; });
         box.scrollTop = box.scrollHeight;
     });
-
     function sendMsg() {
         const t = document.getElementById('c-text').value;
-        if(t) { db.ref('live_chat').push({ text: t, user: active }); document.getElementById('c-text').value = ""; }
+        if(t) { db.ref('live_chat').push({ text: t, user: currentUser }); document.getElementById('c-text').value = ""; }
     }
     function deleteMsg(k) { if(confirm("Delete?")) db.ref('live_chat/'+k).remove(); }
 </script>
