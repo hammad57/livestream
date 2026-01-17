@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultimate Admin Portal - Peer-to-Peer Live</title>
+    <title>Ultimate Admin Portal - Live Stream Fixed</title>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
@@ -17,7 +17,7 @@
         .auth-card input { width: 90%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 8px; }
         .auth-card button { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
 
-        /* Main Layout */
+        /* Layout */
         header { height: 60px; background: #fff; color: #333; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
         .user-profile { display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: bold; color: var(--primary); }
         .user-avatar { width: 35px; height: 35px; background: var(--primary); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
@@ -36,11 +36,11 @@
         .page.active { display: block; }
         .card { background: #222; padding: 25px; border-radius: 12px; border: 1px solid #333; }
         
-        #shared-video { width: 100%; border-radius: 10px; background: #000; margin-top: 15px; border: 2px solid #444; min-height: 300px; }
+        #shared-video { width: 100%; border-radius: 10px; background: #000; margin-top: 15px; border: 2px solid #444; min-height: 350px; object-fit: contain; }
         .share-btn { background: #28a745; color: white; padding: 12px 25px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
         .stop-btn { background: #dc3545; color: white; padding: 12px 25px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; display: none; }
 
-        #chat-msgs { flex: 1; padding: 10px; overflow-y: auto; }
+        #chat-msgs { flex: 1; padding: 10px; overflow-y: auto; font-size: 14px; }
         .msg-bubble { background: white; padding: 8px; margin-bottom: 5px; border-radius: 5px; display: flex; justify-content: space-between; border: 1px solid #ddd; }
         .hidden { display: none !important; }
     </style>
@@ -62,8 +62,8 @@
     <header>
         <div style="font-size: 20px; font-weight: bold;">LIVE PORTAL</div>
         <div class="user-profile" onclick="toggleSidebar()">
-            <span id="display-name">Admin User</span>
-            <div class="user-avatar" id="avatar-icon">A</div>
+            <span id="display-name">User</span>
+            <div class="user-avatar" id="avatar-icon">U</div>
         </div>
     </header>
 
@@ -74,7 +74,7 @@
                     <h2 style="color:red;">🔴 YouTube Player</h2>
                     <a id="play-btn" href="#" target="_blank" style="background:red; color:white; padding:15px 40px; border-radius:10px; text-decoration:none; font-weight:bold; display:inline-block;">WATCH YOUTUBE</a>
                     <div style="margin-top:20px;">
-                        <input type="text" id="yt-url" style="width:60%; padding:12px; background:#333; color:white; border:none;" placeholder="New YouTube Link...">
+                        <input type="text" id="yt-url" style="width:60%; padding:12px; background:#333; color:white; border:none;" placeholder="YouTube Link...">
                         <button onclick="updateLink()" style="padding:12px; background:green; color:white; border:none;">Update</button>
                     </div>
                 </div>
@@ -83,23 +83,22 @@
             <div id="page-screenshare" class="page">
                 <div class="card" style="text-align:center;">
                     <h2>🖥️ Live Screen Sharing</h2>
-                    <p id="share-status">Connecting to network...</p>
-                    <button id="start-share" class="share-btn" onclick="startCapture()">Start Sharing</button>
+                    <p id="share-status">Initializing connection...</p>
+                    <button id="start-share" class="share-btn" onclick="startCapture()">Start Broadcast</button>
                     <button id="stop-share" class="stop-btn" onclick="stopCapture()">Stop Sharing</button>
-                    <button id="watch-live" class="share-btn" style="display:none; background:#007bff;" onclick="joinStream()">Watch Admin Live</button>
+                    <button id="watch-live" class="share-btn" style="display:none; background:#007bff;" onclick="joinStream()">Watch Live Now</button>
                     <video id="shared-video" autoplay playsinline></video>
                 </div>
             </div>
-
             <div id="page-profile" class="page"><div class="card"><h2>👤 Profile</h2><p>User: <span id="p-name"></span></p></div></div>
         </div>
 
         <div class="chat-sidebar">
             <div style="padding:15px; background:#eee; font-weight:bold;">Live Chat</div>
             <div id="chat-msgs"></div>
-            <div style="padding:10px; display:flex; gap:5px;">
+            <div style="padding:10px; display:flex; gap:5px; border-top:1px solid #ddd;">
                 <input type="text" id="c-text" style="flex:1; padding:8px;" placeholder="Message...">
-                <button onclick="sendMsg()" style="padding:8px; background:var(--primary); color:white; border:none;">Send</button>
+                <button onclick="sendMsg()" style="padding:8px; background:var(--primary); color:white; border:none; border-radius:5px;">Send</button>
             </div>
         </div>
     </div>
@@ -110,10 +109,11 @@
     <div class="menu-item" onclick="showPage('page-profile')">Profile</div>
     <div class="menu-item" onclick="showPage('page-video')">Video</div>
     <div class="menu-item" onclick="showPage('page-screenshare')">Screen Sharing</div>
-    <div class="menu-item" onclick="logout()" style="color:red;">Logout</div>
+    <div class="menu-item" onclick="logout()" style="color:red; border-top:1px solid #333;">Logout</div>
 </div>
 
 <script>
+    // Firebase Config
     const firebaseConfig = {
         apiKey: "AIzaSyBRMHSwe81bAULkRMhmBK5sX-6F_aSI2YM",
         authDomain: "weblivestream-3d90a.firebaseapp.com",
@@ -124,30 +124,29 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // --- PeerJS & Screen Share Logic ---
-    let myPeerId = null;
+    // PeerJS Variables
     let peer = null;
     let localStream = null;
     const currentUser = localStorage.getItem('active_user');
 
     function initPeer() {
-        // Hum user ki ID hi Peer ID banayenge taake pehchan asan ho
-        peer = new Peer(currentUser); 
-        peer.on('open', id => { 
-            myPeerId = id; 
-            document.getElementById('share-status').innerText = "Network Ready: " + id;
+        // Use Username as Peer ID for easy connection
+        peer = new Peer(currentUser);
+
+        peer.on('open', id => {
+            document.getElementById('share-status').innerText = "Status: Ready (" + id + ")";
         });
 
-        // Receiving a call (For Viewer)
+        // BROADCASTER SIDE: Automatically answer "calls" from viewers with the stream
         peer.on('call', call => {
-            call.answer(); // Viewer answers with nothing
-            call.on('stream', remoteStream => {
-                document.getElementById('shared-video').srcObject = remoteStream;
-            });
+            if (localStream) {
+                console.log("Broadcasting to viewer...");
+                call.answer(localStream);
+            }
         });
     }
 
-    // Monitoring Broadcaster in Firebase
+    // Syncing UI with Firebase
     db.ref('screen_share_status').on('value', s => {
         const data = s.val();
         const statusText = document.getElementById('share-status');
@@ -159,7 +158,7 @@
             watchBtn.style.display = 'inline-block';
             startBtn.style.display = 'none';
         } else if(!data) {
-            statusText.innerText = "No one is sharing.";
+            statusText.innerText = "No one is sharing right now.";
             watchBtn.style.display = 'none';
             if(!localStream) startBtn.style.display = 'inline-block';
         }
@@ -167,15 +166,17 @@
 
     async function startCapture() {
         try {
-            localStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            localStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "always" }, audio: true });
             document.getElementById('shared-video').srcObject = localStream;
+            
+            // Mark as live in Firebase
             db.ref('screen_share_status').set({ user: currentUser });
 
             document.getElementById('start-share').style.display = 'none';
             document.getElementById('stop-share').style.display = 'inline-block';
 
             localStream.getVideoTracks()[0].onended = () => stopCapture();
-        } catch (err) { alert("Sharing failed."); }
+        } catch (err) { alert("Sharing failed: " + err); }
     }
 
     function stopCapture() {
@@ -189,15 +190,19 @@
 
     function joinStream() {
         db.ref('screen_share_status').once('value', s => {
-            const broadcasterId = s.val().user;
-            // PeerJS se broadcaster ko "call" karein taake stream mil sakay
-            // Note: Actual P2P mein broadcaster viewer ko stream bhejta hai
-            alert("Connecting to " + broadcasterId + "...");
-            const call = peer.call(broadcasterId, new MediaStream()); // Dummy stream to initiate
+            if(!s.val()) return alert("No stream found.");
+            const hostId = s.val().user;
+            
+            // VIEWER SIDE: Call the host to get their stream
+            const call = peer.call(hostId, null); 
+            call.on('stream', remoteStream => {
+                document.getElementById('shared-video').srcObject = remoteStream;
+                document.getElementById('share-status').innerText = "Connected to " + hostId;
+            });
         });
     }
 
-    // --- Original Logic ---
+    // --- Original Logic (Auth & Chat) ---
     let isSignUp = false;
     function toggleAuthMode() {
         isSignUp = !isSignUp;
